@@ -235,6 +235,34 @@ def push_to_github(folder, repo_name, github_token, job):
     return repo_url, username, True
 
 
+def fetch_render_logs(render_token, service_id, owner_id=None, limit=50):
+    """Recent Render service logs, oldest first. Returns [] on any failure."""
+    headers = {"Authorization": f"Bearer {render_token}", "Accept": "application/json"}
+    try:
+        if not owner_id:
+            owners = requests.get(f"{RENDER_API}/owners", headers=headers)
+            if owners.status_code != 200:
+                return []
+            owner_id = owners.json()[0]["owner"]["id"]
+        resp = requests.get(
+            f"{RENDER_API}/logs",
+            headers=headers,
+            params={
+                "ownerId": owner_id,
+                "resource": service_id,
+                "limit": limit,
+                "direction": "backward",
+            },
+        )
+        if resp.status_code != 200:
+            return []
+        entries = resp.json().get("logs", [])
+        entries.reverse()
+        return entries
+    except Exception:
+        return []
+
+
 def deploy_to_render(repo_url, service_name, render_token, build_command, start_command, job, overwrite=False):
     headers = {"Authorization": f"Bearer {render_token}", "Content-Type": "application/json"}
 
@@ -300,8 +328,23 @@ def deploy_to_render(repo_url, service_name, render_token, build_command, start_
         service = resp.json()["service"]
         service_id = service["id"]
 
+    log_owner_id = existing.get("ownerId") if existing else owner_id
+    seen_log_ids = set()
+
+    def stream_render_logs():
+        for entry in fetch_render_logs(render_token, service_id, log_owner_id):
+            entry_id = entry.get("id")
+            if entry_id in seen_log_ids:
+                continue
+            seen_log_ids.add(entry_id)
+            msg = (entry.get("message") or "").rstrip()
+            if msg:
+                log(job, f"  [render] {msg[:500]}")
+
     log(job, "Waiting for build to go live (this can take a few minutes)...")
+    last_status = None
     for i in range(60):
+        stream_render_logs()
         deploys = requests.get(f"{RENDER_API}/services/{service_id}/deploys?limit=1", headers=headers)
         deploy_list = deploys.json()
         if not deploy_list:
@@ -309,14 +352,18 @@ def deploy_to_render(repo_url, service_name, render_token, build_command, start_
             time.sleep(10)
             continue
         status = deploy_list[0]["deploy"]["status"]
-        log(job, f"  deploy status: {status}")
+        if status != last_status:
+            log(job, f"  deploy status: {status}")
+            last_status = status
         if status == "live":
             break
         if status in ("build_failed", "update_failed", "canceled"):
-            raise RuntimeError(f"Render deploy failed with status: {status}")
+            stream_render_logs()
+            raise RuntimeError(f"Render deploy failed with status: {status} — see the [render] log lines above for the cause")
         time.sleep(10)
     else:
-        raise RuntimeError("Timed out waiting for deploy to go live")
+        stream_render_logs()
+        raise RuntimeError("Timed out waiting for deploy to go live — see the [render] log lines above")
 
     svc = requests.get(f"{RENDER_API}/services/{service_id}", headers=headers).json()
     service = svc.get("service", svc) if isinstance(svc, dict) else {}

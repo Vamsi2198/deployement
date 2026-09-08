@@ -10,7 +10,9 @@ framework and writes the right build/start commands.
   runs the deploy pipeline in a background thread, exposes a status
   endpoint the page polls for live logs.
 - `deploy_engine.py` — the actual pipeline: unzip → detect stack → create
-  GitHub repo & push → create Render service → poll until live → return URL.
+  GitHub repo & push → create Render service → stream Render's build/runtime
+  logs into the page while polling → return URL. On failure, the Render log
+  lines show the actual error.
 - `static/index.html` — the upload page (drag-and-drop zip, project name,
   optional token fields under "Use my own tokens").
 
