@@ -340,7 +340,7 @@ def run_pipeline(job, zip_path, project_name, github_token, render_token, overwr
         log(job, "Detecting stack...")
         build_command, start_command = detect_stack(workdir, job)
 
-        if build_override.strip():
+        if build_override.strip() and build_override.strip() != "pip install -r requirements.txt":
             build_command = build_override.strip()
             log(job, f"Using custom build command: {build_command}")
         if start_override.strip():

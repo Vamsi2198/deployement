@@ -119,9 +119,9 @@
     <details>
       <summary>Custom build / run commands (optional)</summary>
       <label>Build command</label>
-      <input type="text" id="buildCommand" placeholder="pip install -r requirements.txt">
+      <input type="text" id="buildCommand" value="pip install -r requirements.txt">
       <label>Start command</label>
-      <input type="text" id="startCommand" placeholder="uvicorn main:app --host 0.0.0.0 --port $PORT">
+      <input type="text" id="startCommand" placeholder="leave blank to auto-detect, e.g. uvicorn main:app --host 0.0.0.0 --port $PORT">
     </details>
 
     <button id="submitBtn">Deploy</button>
