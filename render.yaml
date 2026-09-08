@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: deployement
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      # Optional: set these so visitors who don't type in their own tokens
+      # can still deploy, using your account instead.
+      # - key: GITHUB_TOKEN
+      #   value: ghp_xxxxxxxxxxxx
+      # - key: RENDER_API_KEY
+      #   value: rnd_xxxxxxxxxxxx

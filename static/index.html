@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Deploy your folder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2e38;
+    --text: #e6e8eb;
+    --muted: #9aa1ac;
+    --accent: #5b8cff;
+    --ok: #3ddc97;
+    --err: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .card {
+    width: 100%;
+    max-width: 520px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 16px 0 6px; }
+  input[type=text], input[type=password] {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #0f1115;
+    color: var(--text);
+    font-size: 14px;
+  }
+  .drop {
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    text-align: center;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .drop.drag { border-color: var(--accent); color: var(--text); }
+  details { margin-top: 18px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  button {
+    width: 100%;
+    margin-top: 22px;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #log {
+    margin-top: 20px;
+    background: #0f1115;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    max-height: 220px;
+    overflow-y: auto;
+    display: none;
+    white-space: pre-wrap;
+  }
+  #result {
+    margin-top: 16px;
+    display: none;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  #result.ok { background: rgba(61,220,151,0.1); border: 1px solid var(--ok); color: var(--ok); }
+  #result.err { background: rgba(255,107,107,0.1); border: 1px solid var(--err); color: var(--err); }
+  #result a { color: inherit; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Deploy your folder</h1>
+    <p class="sub">Upload a zipped project. We'll push it to GitHub and deploy it on Render.</p>
+
+    <label>Project folder (.zip)</label>
+    <div class="drop" id="drop">Drop a .zip file here, or click to choose</div>
+    <input type="file" id="fileInput" accept=".zip" style="display:none">
+
+    <label>Project name</label>
+    <input type="text" id="projectName" placeholder="my-cool-app">
+
+    <details>
+      <summary>Use my own tokens (optional)</summary>
+      <label>GitHub token</label>
+      <input type="password" id="githubToken" placeholder="ghp_...">
+      <label>Render API key</label>
+      <input type="password" id="renderToken" placeholder="rnd_...">
+    </details>
+
+    <details>
+      <summary>Custom build / run commands (optional)</summary>
+      <label>Build command</label>
+      <input type="text" id="buildCommand" placeholder="pip install -r requirements.txt">
+      <label>Start command</label>
+      <input type="text" id="startCommand" placeholder="uvicorn main:app --host 0.0.0.0 --port $PORT">
+    </details>
+
+    <button id="submitBtn">Deploy</button>
+
+    <div id="log"></div>
+    <div id="result"></div>
+  </div>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+let selectedFile = null;
+
+drop.onclick = () => fileInput.click();
+fileInput.onchange = () => { selectedFile = fileInput.files[0]; drop.textContent = selectedFile.name; };
+['dragover','dragleave','drop'].forEach(evt => {
+  drop.addEventListener(evt, e => {
+    e.preventDefault();
+    drop.classList.toggle('drag', evt === 'dragover');
+    if (evt === 'drop') {
+      selectedFile = e.dataTransfer.files[0];
+      drop.textContent = selectedFile.name;
+    }
+  });
+});
+
+const submitBtn = document.getElementById('submitBtn');
+const logEl = document.getElementById('log');
+const resultEl = document.getElementById('result');
+
+submitBtn.onclick = () => {
+  if (!selectedFile) { alert('Choose a .zip file first'); return; }
+  const projectName = document.getElementById('projectName').value.trim();
+  if (!projectName) { alert('Give your project a name'); return; }
+  startDeploy(projectName, false);
+};
+
+async function startDeploy(projectName, overwrite) {
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Deploying...';
+  logEl.style.display = 'block';
+  logEl.textContent = 'Uploading...';
+  resultEl.style.display = 'none';
+
+  const form = new FormData();
+  form.append('file', selectedFile);
+  form.append('project_name', projectName);
+  form.append('github_token', document.getElementById('githubToken').value.trim());
+  form.append('render_token', document.getElementById('renderToken').value.trim());
+  form.append('overwrite', overwrite ? 'true' : 'false');
+  form.append('build_command', document.getElementById('buildCommand').value.trim());
+  form.append('start_command', document.getElementById('startCommand').value.trim());
+
+  let res;
+  try {
+    res = await fetch('/deploy', { method: 'POST', body: form });
+  } catch (e) {
+    showError('Upload failed: ' + e.message);
+    return;
+  }
+  const data = await res.json();
+
+  if (res.status === 409 && data.conflict) {
+    const what = data.repo_exists && data.service_exists
+      ? 'a GitHub repo AND a Render service'
+      : data.repo_exists ? 'a GitHub repo' : 'a Render service';
+    const update = confirm(
+      'There is already ' + what + ' named "' + data.name + '".\n\n' +
+      'OK = merge your files into the existing one (keeps the same URL and history)\n' +
+      'Cancel = pick a different project name'
+    );
+    if (update) {
+      return startDeploy(data.name, true);
+    }
+    const newName = prompt('Enter a new project name:', data.name + '-2');
+    if (newName && newName.trim()) {
+      document.getElementById('projectName').value = newName.trim();
+      return startDeploy(newName.trim(), false);
+    }
+    showError('Deploy cancelled.');
+    return;
+  }
+
+  if (!res.ok) { showError(data.error || 'Deploy failed'); return; }
+
+  const jobId = data.job_id;
+  poll(jobId);
+}
+
+async function poll(jobId) {
+  const res = await fetch('/status/' + jobId);
+  const job = await res.json();
+  logEl.textContent = (job.logs || []).join('\n');
+  logEl.scrollTop = logEl.scrollHeight;
+
+  if (job.status === 'done') {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Deploy';
+    resultEl.className = 'ok';
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = 'Deployed! <a href="' + job.live_url + '" target="_blank">' + job.live_url + '</a>';
+  } else if (job.status === 'error') {
+    showError(job.logs[job.logs.length - 1] || 'Deploy failed');
+  } else {
+    setTimeout(() => poll(jobId), 3000);
+  }
+}
+
+function showError(msg) {
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Deploy';
+  resultEl.className = 'err';
+  resultEl.style.display = 'block';
+  resultEl.textContent = msg;
+}
+</script>
+</body>
+</html>
