@@ -16,6 +16,11 @@ def log(job, msg):
     print(msg)
 
 
+def log_render(job, msg):
+    job.setdefault("render_logs", []).append(msg)
+    print(msg)
+
+
 def extract_zip(zip_path, dest_dir):
     dest_dir = os.path.abspath(dest_dir)
     with zipfile.ZipFile(zip_path, "r") as z:
@@ -339,7 +344,7 @@ def deploy_to_render(repo_url, service_name, render_token, build_command, start_
             seen_log_ids.add(entry_id)
             msg = (entry.get("message") or "").rstrip()
             if msg:
-                log(job, f"  [render] {msg[:500]}")
+                log_render(job, msg[:500])
 
     log(job, "Waiting for build to go live (this can take a few minutes)...")
     last_status = None
@@ -359,11 +364,11 @@ def deploy_to_render(repo_url, service_name, render_token, build_command, start_
             break
         if status in ("build_failed", "update_failed", "canceled"):
             stream_render_logs()
-            raise RuntimeError(f"Render deploy failed with status: {status} — see the [render] log lines above for the cause")
+            raise RuntimeError(f"Render deploy failed with status: {status} — see the Render logs panel for the cause")
         time.sleep(10)
     else:
         stream_render_logs()
-        raise RuntimeError("Timed out waiting for deploy to go live — see the [render] log lines above")
+        raise RuntimeError("Timed out waiting for deploy to go live — see the Render logs panel for details")
 
     svc = requests.get(f"{RENDER_API}/services/{service_id}", headers=headers).json()
     service = svc.get("service", svc) if isinstance(svc, dict) else {}

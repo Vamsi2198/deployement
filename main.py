@@ -70,7 +70,7 @@ async def deploy(
     with os.fdopen(tmp_fd, "wb") as f:
         f.write(await file.read())
 
-    job = {"status": "queued", "logs": [], "repo_url": None, "live_url": None}
+    job = {"status": "queued", "logs": [], "render_logs": [], "repo_url": None, "live_url": None}
     JOBS[job_id] = job
 
     thread = threading.Thread(

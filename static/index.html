@@ -94,9 +94,31 @@
   #result.ok { background: rgba(61,220,151,0.1); border: 1px solid var(--ok); color: var(--ok); }
   #result.err { background: rgba(255,107,107,0.1); border: 1px solid var(--err); color: var(--err); }
   #result a { color: inherit; font-weight: 600; }
+  .panels {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .side { max-width: 560px; }
+  #renderLog {
+    background: #0f1115;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    height: 480px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
 </style>
 </head>
 <body>
+  <div class="panels">
   <div class="card">
     <h1>Deploy your folder</h1>
     <p class="sub">Upload a zipped project. We'll push it to GitHub and deploy it on Render.</p>
@@ -130,6 +152,13 @@
     <div id="result"></div>
   </div>
 
+  <div class="card side" id="renderPanel" style="display:none">
+    <h1>Render logs</h1>
+    <p class="sub">Live build &amp; runtime output from Render</p>
+    <div id="renderLog">Waiting for deploy to start...</div>
+  </div>
+  </div>
+
 <script>
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('fileInput');
@@ -151,6 +180,8 @@ fileInput.onchange = () => { selectedFile = fileInput.files[0]; drop.textContent
 const submitBtn = document.getElementById('submitBtn');
 const logEl = document.getElementById('log');
 const resultEl = document.getElementById('result');
+const renderPanel = document.getElementById('renderPanel');
+const renderLogEl = document.getElementById('renderLog');
 
 submitBtn.onclick = () => {
   if (!selectedFile) { alert('Choose a .zip file first'); return; }
@@ -165,6 +196,8 @@ async function startDeploy(projectName, overwrite) {
   logEl.style.display = 'block';
   logEl.textContent = 'Uploading...';
   resultEl.style.display = 'none';
+  renderPanel.style.display = 'block';
+  renderLogEl.textContent = 'Waiting for Render build to start...';
 
   const form = new FormData();
   form.append('file', selectedFile);
@@ -216,6 +249,10 @@ async function poll(jobId) {
   const job = await res.json();
   logEl.textContent = (job.logs || []).join('\n');
   logEl.scrollTop = logEl.scrollHeight;
+  if ((job.render_logs || []).length) {
+    renderLogEl.textContent = job.render_logs.join('\n');
+    renderLogEl.scrollTop = renderLogEl.scrollHeight;
+  }
 
   if (job.status === 'done') {
     submitBtn.disabled = false;
